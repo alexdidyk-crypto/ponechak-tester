@@ -18,11 +18,9 @@ jobs:
         run: brew install xcodegen
 
       - name: Generate Xcode project
-        working-directory: tester-app
         run: xcodegen generate
 
       - name: Build (unsigned)
-        working-directory: tester-app
         run: |
           set -eo pipefail
           xcodebuild \
@@ -37,7 +35,6 @@ jobs:
             build
 
       - name: Package unsigned .ipa
-        working-directory: tester-app
         run: |
           set -e
           APP_PATH="build/Build/Products/Release-iphoneos/PonechakTester.app"
@@ -51,5 +48,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: PonechakTester-unsigned-ipa
-          path: tester-app/PonechakTester-unsigned.ipa
+          path: PonechakTester-unsigned.ipa
           if-no-files-found: error
