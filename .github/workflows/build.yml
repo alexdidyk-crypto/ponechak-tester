@@ -1,0 +1,55 @@
+name: Build unsigned IPA
+
+# Собирает НЕподписанный .ipa на бесплатном macOS-раннере GitHub.
+# Сертификат Apple НЕ нужен — подпись делает Sideloadly на Windows бесплатным Apple ID.
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        working-directory: tester-app
+        run: xcodegen generate
+
+      - name: Build (unsigned)
+        working-directory: tester-app
+        run: |
+          set -eo pipefail
+          xcodebuild \
+            -project PonechakTester.xcodeproj \
+            -scheme PonechakTester \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package unsigned .ipa
+        working-directory: tester-app
+        run: |
+          set -e
+          APP_PATH="build/Build/Products/Release-iphoneos/PonechakTester.app"
+          rm -rf Payload
+          mkdir Payload
+          cp -R "$APP_PATH" Payload/
+          zip -qry PonechakTester-unsigned.ipa Payload
+          echo "Built: $(ls -lh PonechakTester-unsigned.ipa)"
+
+      - name: Upload IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PonechakTester-unsigned-ipa
+          path: tester-app/PonechakTester-unsigned.ipa
+          if-no-files-found: error

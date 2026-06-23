@@ -1,0 +1,34 @@
+# XcodeGen spec — generates PonechakTester.xcodeproj in CI (no Mac needed locally).
+name: PonechakTester
+options:
+  bundleIdPrefix: eu.evy.ponechak
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"          # iPhone only
+    SWIFT_VERSION: "5.0"
+targets:
+  PonechakTester:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Support/Info.plist
+      properties:
+        CFBundleDisplayName: PONECHAK
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        NSMicrophoneUsageDescription: "Проверка микрофонов устройства"
+        NSCameraUsageDescription: "Проверка камеры устройства"
+        NSFaceIDUsageDescription: "Проверка Face ID"
+        NSLocationWhenInUseUsageDescription: "Проверка геолокации"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: eu.evy.ponechak.tester
+        CODE_SIGN_STYLE: Manual
