@@ -116,12 +116,23 @@ struct ContentView: View {
     @State private var torchOn = false
     @State private var speakerPlaying = false
     @State private var showDisplayTest = false
+    @State private var showMicTest = false
 
     private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
     var body: some View {
         NavigationView {
             ScrollView {
+                Button(action: { showMicTest = true }) {
+                    HStack {
+                        Image(systemName: "waveform.badge.mic")
+                        Text("Авто-тест микрофонов").fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity).padding()
+                    .background(Color.accentColor).foregroundColor(.white).cornerRadius(14)
+                }
+                .padding(.horizontal, 12).padding(.top, 12)
+
                 LazyVGrid(columns: columns, spacing: 12) {
                     ForEach(micNames, id: \.self) { name in
                         MicTile(micName: name, display: micLabel(name), mic: mic, verdict: $micVerdict)
@@ -148,6 +159,9 @@ struct ContentView: View {
                 mic.stop(); volume.stop(); sensors.stop(); deviceInfo.stop(); TorchTester.set(false)
             }
             .fullScreenCover(isPresented: $showDisplayTest) { DisplayTestView() }
+            .fullScreenCover(isPresented: $showMicTest) {
+                MicTestView(mics: micNames, label: micLabel, verdict: $micVerdict)
+            }
         }
         .navigationViewStyle(.stack)
     }
