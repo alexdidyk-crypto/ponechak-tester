@@ -32,6 +32,7 @@ final class ToneTester {
     /// - Parameter configureSession: when false, keeps the current audio session
     ///   (used during the mic loopback test where recording is already active).
     func play(seconds: Double = 2.0, frequency: Double = 880, configureSession: Bool = true) {
+        stop()  // stop any previous tone first (sweep changes frequency)
         if configureSession {
             let session = AVAudioSession.sharedInstance()
             try? session.setCategory(.playback, options: [.defaultToSpeaker])
