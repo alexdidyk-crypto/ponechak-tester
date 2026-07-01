@@ -69,7 +69,7 @@ struct MicTestView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Text("🎙 Качество микрофонов").font(.title2).bold()
+            Text("🎙 Microphone quality").font(.title2).bold()
             Text(headline).foregroundColor(.secondary).font(.subheadline)
 
             if !tester.finished {
@@ -87,7 +87,7 @@ struct MicTestView: View {
                 }
             }
 
-            Button(tester.finished ? "Закрыть" : "Отмена") { tester.cancel(); dismiss() }
+            Button(tester.finished ? "Close" : "Cancel") { tester.cancel(); dismiss() }
                 .frame(maxWidth: .infinity).padding()
                 .background(tester.finished ? Color.green : Color.accentColor)
                 .foregroundColor(.white).cornerRadius(12)
@@ -103,13 +103,13 @@ struct MicTestView: View {
     private var headline: String {
         if let cur = tester.currentMic {
             let f = tester.currentFreq
-            return f > 0 ? "\(label(cur)) · \(f) Гц" : "\(label(cur)) · фон"
+            return f > 0 ? "\(label(cur)) · \(f) Hz" : "\(label(cur)) · baseline"
         }
         if tester.finished {
             let ok = tester.results.values.filter { $0 }.count
-            return "Готово · хороших: \(ok) из \(mics.count)"
+            return "Done · good: \(ok) of \(mics.count)"
         }
-        return "Запуск…"
+        return "Starting…"
     }
 
     private func resultCard(_ mic: String, _ q: MicQuality) -> some View {
@@ -121,11 +121,11 @@ struct MicTestView: View {
             }
             ResponseBars(bands: q.bands)
             HStack {
-                Text(String(format: "SNR %.0f дБ", q.snr))
+                Text(String(format: "SNR %.0f dB", q.snr))
                 Spacer()
-                Text(String(format: "верхи %@%.0f дБ", q.rolloff >= 0 ? "+" : "", q.rolloff))
+                Text(String(format: "highs %@%.0f dB", q.rolloff >= 0 ? "+" : "", q.rolloff))
                 Spacer()
-                Text(String(format: "шум %.0f", q.noiseFloor))
+                Text(String(format: "noise %.0f", q.noiseFloor))
             }
             .font(.caption).foregroundColor(.secondary)
         }

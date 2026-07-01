@@ -3,7 +3,7 @@ import CoreHaptics
 import LocalAuthentication
 import UIKit
 
-/// Face ID / Touch ID checks — also impossible from a web page.
+/// Face ID / Touch ID checks.
 enum BiometryTester {
     static func describe() -> String {
         let ctx = LAContext()
@@ -11,35 +11,34 @@ enum BiometryTester {
         let canEval = ctx.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error)
         switch ctx.biometryType {
         case .faceID:
-            return canEval ? "Face ID доступен" : "Face ID есть, но не настроен/недоступен"
+            return canEval ? "Face ID available" : "Face ID present, not enrolled"
         case .touchID:
-            return canEval ? "Touch ID доступен" : "Touch ID есть, но недоступен"
+            return canEval ? "Touch ID available" : "Touch ID present, not enrolled"
         case .opticID:
-            return canEval ? "Optic ID доступен" : "Optic ID недоступен"
+            return canEval ? "Optic ID available" : "Optic ID unavailable"
         default:
-            return "Биометрия не обнаружена"
+            return "No biometrics detected"
         }
     }
 
     static func evaluate(_ completion: @escaping (Bool, String) -> Void) {
         let ctx = LAContext()
         ctx.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics,
-                           localizedReason: "Проверка биометрии") { ok, error in
+                           localizedReason: "Biometry test") { ok, error in
             DispatchQueue.main.async {
-                completion(ok, ok ? "Распознано ✓" : (error?.localizedDescription ?? "Не распознано"))
+                completion(ok, ok ? "Recognized ✓" : (error?.localizedDescription ?? "Not recognized"))
             }
         }
     }
 }
 
-/// Vibration / Taptic Engine — web has no access to this on iOS.
+/// Vibration / Taptic Engine.
 enum VibrationTester {
     static func buzz() {
         if CHHapticEngine.capabilitiesForHardware().supportsHaptics {
             let generator = UINotificationFeedbackGenerator()
             generator.notificationOccurred(.success)
         }
-        // legacy vibration as a fallback (works on all devices)
         AudioServicesPlaySystemSound(kSystemSoundID_Vibrate)
     }
 }
@@ -56,7 +55,7 @@ final class VolumeButtonTester: ObservableObject {
         observation = session.observe(\.outputVolume, options: [.new, .old]) { [weak self] _, change in
             guard let self = self, let new = change.newValue, let old = change.oldValue else { return }
             DispatchQueue.main.async {
-                self.lastChange = new > old ? "Громкость + нажата" : "Громкость − нажата"
+                self.lastChange = new > old ? "Volume + pressed" : "Volume − pressed"
                 self.pressed = true
             }
         }

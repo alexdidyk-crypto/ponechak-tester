@@ -20,7 +20,7 @@ final class SensorTester: ObservableObject {
                                      d.acceleration.x, d.acceleration.y, d.acceleration.z)
                 if abs(d.acceleration.x) + abs(d.acceleration.y) > 0.35 { self?.moved = true }
             }
-        } else { accel = "недоступен" }
+        } else { accel = "N/A" }
 
         if motion.isGyroAvailable {
             motion.gyroUpdateInterval = 0.1
@@ -29,7 +29,7 @@ final class SensorTester: ObservableObject {
                 self?.gyro = String(format: "x %.2f  y %.2f  z %.2f",
                                     d.rotationRate.x, d.rotationRate.y, d.rotationRate.z)
             }
-        } else { gyro = "недоступен" }
+        } else { gyro = "N/A" }
 
         if motion.isMagnetometerAvailable {
             motion.magnetometerUpdateInterval = 0.2
@@ -38,7 +38,7 @@ final class SensorTester: ObservableObject {
                 self?.magnet = String(format: "x %.0f  y %.0f  z %.0f",
                                       d.magneticField.x, d.magneticField.y, d.magneticField.z)
             }
-        } else { magnet = "недоступен" }
+        } else { magnet = "N/A" }
     }
 
     func stop() {
@@ -70,11 +70,11 @@ final class DeviceInfoTester: ObservableObject {
         })
 
         device.isProximityMonitoringEnabled = true
-        proximity = device.isProximityMonitoringEnabled ? "поднеси руку к верху экрана" : "недоступен"
+        proximity = device.isProximityMonitoringEnabled ? "cover the top of the screen" : "N/A"
         observers.append(NotificationCenter.default.addObserver(
             forName: UIDevice.proximityStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             let near = UIDevice.current.proximityState
-            self?.proximity = near ? "СРАБОТАЛ (закрыт) ✓" : "открыт"
+            self?.proximity = near ? "triggered ✓" : "clear"
             if near { self?.proximityTriggered = true }
         })
     }
@@ -84,10 +84,10 @@ final class DeviceInfoTester: ObservableObject {
         let level = device.batteryLevel >= 0 ? "\(Int(device.batteryLevel * 100))%" : "—"
         let state: String
         switch device.batteryState {
-        case .charging: state = "заряжается"
-        case .full: state = "полная"
-        case .unplugged: state = "от батареи"
-        default: state = "неизвестно"
+        case .charging: state = "charging"
+        case .full: state = "full"
+        case .unplugged: state = "on battery"
+        default: state = "unknown"
         }
         battery = "\(level) · \(state)"
     }

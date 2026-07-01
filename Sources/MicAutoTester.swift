@@ -135,15 +135,15 @@ final class MicAutoTester: ObservableObject {
         let verdict: String
         let pass: Bool
         if snr < 8 {
-            verdict = "🔴 Не ловит"; pass = false
+            verdict = "🔴 No signal"; pass = false
         } else if noiseFloor > -42 {
-            verdict = "🟡 Шумит"; pass = false
+            verdict = "🟡 Noisy"; pass = false
         } else if rolloff < -12 {
-            verdict = "🟡 Глухой (засор?)"; pass = false
+            verdict = "🟡 Muffled (clogged?)"; pass = false
         } else if snr < 18 {
-            verdict = "🟡 Слабый"; pass = false
+            verdict = "🟡 Weak"; pass = false
         } else {
-            verdict = "🟢 Хороший"; pass = true
+            verdict = "🟢 Good"; pass = true
         }
 
         let bands = zip(freqs, bandDB).map { BandLevel(freq: $0, db: $1) }

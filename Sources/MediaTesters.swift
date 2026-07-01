@@ -1,5 +1,7 @@
 import AVFoundation
 
+enum AudioRoute { case speaker, earpiece }
+
 /// Flashlight / torch (LED).
 enum TorchTester {
     static var available: Bool {
@@ -20,7 +22,7 @@ enum TorchTester {
     }
 }
 
-/// Plays a sustained tone through the speaker to verify it works.
+/// Plays a tone through a chosen speaker: bottom loudspeaker or top earpiece.
 final class ToneTester {
     private var engine: AVAudioEngine?
 
@@ -29,18 +31,21 @@ final class ToneTester {
         engine = nil
     }
 
-    /// - Parameter configureSession: when false, keeps the current audio session
-    ///   (used during the mic loopback test where recording is already active).
-    /// - Parameter earpiece: route to the top receiver (earpiece) instead of the
-    ///   bottom loudspeaker, so each speaker can be tested separately.
     func play(seconds: Double = 2.0, frequency: Double = 880,
-              configureSession: Bool = true, earpiece: Bool = false) {
-        stop()  // stop any previous tone first (sweep changes frequency)
+              route: AudioRoute = .speaker, configureSession: Bool = true) {
+        stop()
         if configureSession {
             let session = AVAudioSession.sharedInstance()
-            try? session.setCategory(.playAndRecord, options: earpiece ? [] : [.defaultToSpeaker])
-            try? session.setActive(true)
-            try? session.overrideOutputAudioPort(earpiece ? .none : .speaker)
+            if route == .earpiece {
+                // Receiver (top earpiece): play&record without speaker override.
+                try? session.setCategory(.playAndRecord, options: [])
+                try? session.setActive(true)
+                try? session.overrideOutputAudioPort(.none)
+            } else {
+                // Bottom loudspeaker.
+                try? session.setCategory(.playback, options: [])
+                try? session.setActive(true)
+            }
         }
 
         let sampleRate = 44100.0

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// MARK: - Tile status / styling
+// MARK: - Tile styling
 
 enum TileStatus: Equatable {
     case idle, running, pass, fail, info
@@ -33,259 +33,250 @@ enum TileStatus: Equatable {
     var badgeColor: Color { self == .pass ? .green : .red }
 }
 
-// MARK: - Generic tile container
-
 struct TileCard<Content: View>: View {
     let title: String
     let icon: String
     let status: TileStatus
-    let action: () -> Void
-    @ViewBuilder var content: Content
+    var onTap: (() -> Void)? = nil
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
-        Button(action: action) {
-            VStack(spacing: 6) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: icon).font(.system(size: 26)).frame(maxWidth: .infinity)
-                    if let badge = status.badge {
-                        Image(systemName: badge).foregroundColor(status.badgeColor)
-                    }
+        VStack(spacing: 8) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: icon).font(.system(size: 24)).frame(maxWidth: .infinity)
+                if let badge = status.badge {
+                    Image(systemName: badge).foregroundColor(status.badgeColor)
                 }
-                Text(title).font(.caption).fontWeight(.semibold)
-                    .multilineTextAlignment(.center).lineLimit(2)
-                content
             }
-            .frame(maxWidth: .infinity, minHeight: 130)
-            .padding(12)
-            .background(status.bg)
-            .overlay(RoundedRectangle(cornerRadius: 16).stroke(status.border, lineWidth: 2))
-            .cornerRadius(16)
+            Text(title).font(.caption).fontWeight(.semibold)
+                .multilineTextAlignment(.center).lineLimit(2)
+            content()
         }
-        .buttonStyle(.plain)
+        .frame(maxWidth: .infinity, minHeight: 128)
+        .padding(12)
+        .background(status.bg)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(status.border, lineWidth: 1.5))
+        .cornerRadius(16)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap?() }
     }
 }
 
-// MARK: - Microphone tile (live level on the tile)
+// MARK: - Microphone record + playback tile
 
-struct MicTile: View {
+struct MicRecordTile: View {
     let micName: String
     let display: String
-    @ObservedObject var mic: MicTester
-    @Binding var verdict: [String: Bool]
+    @StateObject private var rec: MicRecorder
 
-    private var isActive: Bool { mic.recordingName == micName }
+    init(micName: String, display: String) {
+        self.micName = micName
+        self.display = display
+        _rec = StateObject(wrappedValue: MicRecorder(micName: micName))
+    }
+
     private var status: TileStatus {
-        if isActive { return .running }
-        if let v = verdict[micName] { return v ? .pass : .fail }
-        return .idle
-    }
-
-    var body: some View {
-        TileCard(title: display, icon: "mic.fill", status: status, action: tap) {
-            if isActive {
-                ProgressView(value: mic.level).tint(mic.level > 0.25 ? .green : .blue)
-                Text(mic.peak > 0.25 ? "сигнал есть · стоп" : "говори…")
-                    .font(.caption2).foregroundColor(.secondary)
-            } else if let v = verdict[micName] {
-                Text(v ? "OK" : "нет сигнала").font(.caption2).foregroundColor(.secondary)
-            } else {
-                Text("нажми для теста").font(.caption2).foregroundColor(.secondary)
-            }
+        switch rec.state {
+        case .recording, .playing: return .running
+        case .recorded: return .pass
+        case .idle: return .idle
         }
     }
 
-    private func tap() {
-        if isActive { verdict[micName] = mic.peak > 0.25; mic.stop() }
-        else { mic.start(micName: micName) }
-    }
-}
-
-// MARK: - Record & playback tile (per microphone)
-
-struct MicRecPlayTile: View {
-    let micName: String
-    let display: String
-    @ObservedObject var rp: MicRecordPlayer
-
-    private var isActive: Bool { rp.activeMic == micName }
-    private var status: TileStatus { isActive ? .running : .idle }
-
     var body: some View {
-        TileCard(title: display, icon: "record.circle.fill", status: status,
-                 action: { if !isActive { rp.recordThenPlay(micName: micName) } }) {
-            if isActive {
-                if rp.phase == .recording {
-                    ProgressView(value: rp.level).tint(.red)
-                    Text("recording 3s…").font(.caption2).foregroundColor(.secondary)
-                } else {
-                    Text("playing…").font(.caption2).foregroundColor(.secondary)
+        VStack(spacing: 8) {
+            Image(systemName: "mic.fill").font(.system(size: 22))
+            Text(display).font(.caption).fontWeight(.semibold).lineLimit(1)
+            if rec.state == .recording {
+                ProgressView(value: rec.level).tint(.green)
+                Text("recording…").font(.caption2).foregroundColor(.secondary)
+            } else {
+                HStack(spacing: 8) {
+                    Button("Rec") { rec.record() }
+                        .buttonStyle(.borderedProminent).controlSize(.small)
+                    Button("Play") { rec.play() }
+                        .buttonStyle(.bordered).controlSize(.small).disabled(!rec.hasRecording)
                 }
-            } else {
-                Text("record + play").font(.caption2).foregroundColor(.secondary)
+                Text(stateText).font(.caption2).foregroundColor(.secondary)
             }
+        }
+        .frame(maxWidth: .infinity, minHeight: 128)
+        .padding(12)
+        .background(status.bg)
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(status.border, lineWidth: 1.5))
+        .cornerRadius(16)
+        .onDisappear { rec.stopAll() }
+    }
+
+    private var stateText: String {
+        switch rec.state {
+        case .playing: return "playing…"
+        case .recorded: return "recorded ✓"
+        default: return "record, then play"
         }
     }
 }
 
-// MARK: - Main dashboard
+// MARK: - Speaker tiles (bottom loudspeaker / top earpiece)
 
-struct ContentView: View {
-    @StateObject private var mic = MicTester()
-    @StateObject private var volume = VolumeButtonTester()
-    @StateObject private var sensors = SensorTester()
-    @StateObject private var deviceInfo = DeviceInfoTester()
-    @StateObject private var recPlayer = MicRecordPlayer()
+struct SpeakerToneTile: View {
+    let title: String
+    let icon: String
+    let route: AudioRoute
+    @State private var playing = false
     private let tone = ToneTester()
 
-    @State private var micNames: [String] = []
-    @State private var micVerdict: [String: Bool] = [:]
-    @State private var biometryStatus: TileStatus = .idle
-    @State private var biometryText = ""
-    @State private var torchOn = false
-    @State private var spkTop = false
-    @State private var spkBottom = false
-    @State private var showDisplayTest = false
-    @State private var showMicTest = false
+    var body: some View {
+        TileCard(title: title, icon: icon, status: playing ? .running : .idle, onTap: {
+            playing = true
+            tone.play(route: route)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { playing = false }
+        }) {
+            Text(playing ? "playing…" : "tap to test").font(.caption2).foregroundColor(.secondary)
+        }
+    }
+}
 
-    private let columns = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
+// MARK: - Simple / live tiles
+
+struct TorchTile: View {
+    @State private var on = false
+    var body: some View {
+        TileCard(title: "Flashlight", icon: on ? "flashlight.on.fill" : "flashlight.off.fill",
+                 status: on ? .running : .idle, onTap: { on.toggle(); TorchTester.set(on) }) {
+            Text(TorchTester.available ? (on ? "on" : "tap to toggle") : "N/A")
+                .font(.caption2).foregroundColor(.secondary)
+        }
+        .onDisappear { if on { TorchTester.set(false) } }
+    }
+}
+
+struct DisplayTile: View {
+    @Binding var show: Bool
+    var body: some View {
+        TileCard(title: "Display", icon: "square.stack.3d.up.fill", status: .idle, onTap: { show = true }) {
+            Text("colors / dead pixels").font(.caption2).foregroundColor(.secondary)
+        }
+    }
+}
+
+struct BiometryTile: View {
+    @State private var status: TileStatus = .idle
+    @State private var text = BiometryTester.describe()
+    var body: some View {
+        TileCard(title: "Face ID / Touch ID", icon: "faceid", status: status, onTap: {
+            BiometryTester.evaluate { ok, msg in status = ok ? .pass : .fail; text = msg }
+        }) {
+            Text(text).font(.caption2).foregroundColor(.secondary).lineLimit(2)
+        }
+    }
+}
+
+struct VibrationTile: View {
+    var body: some View {
+        TileCard(title: "Vibration", icon: "iphone.radiowaves.left.and.right",
+                 status: .idle, onTap: { VibrationTester.buzz() }) {
+            Text("tap to buzz").font(.caption2).foregroundColor(.secondary)
+        }
+    }
+}
+
+struct SensorsTile: View {
+    @StateObject private var s = SensorTester()
+    var body: some View {
+        TileCard(title: "Motion sensors", icon: "gyroscope", status: s.moved ? .pass : .idle) {
+            Text(s.accel).font(.system(size: 9, design: .monospaced)).foregroundColor(.secondary).lineLimit(1)
+            Text(s.moved ? "motion ✓" : "tilt the phone").font(.caption2).foregroundColor(.secondary)
+        }
+        .onAppear { s.start() }
+        .onDisappear { s.stop() }
+    }
+}
+
+struct DeviceTile: View {
+    @StateObject private var d = DeviceInfoTester()
+    var body: some View {
+        TileCard(title: "Proximity & battery", icon: "battery.100", status: d.proximityTriggered ? .pass : .info) {
+            Text("Battery: \(d.battery)").font(.caption2).foregroundColor(.secondary).lineLimit(1)
+            Text("Proximity: \(d.proximity)").font(.caption2).foregroundColor(.secondary).lineLimit(1)
+        }
+        .onAppear { d.start() }
+        .onDisappear { d.stop() }
+    }
+}
+
+struct VolumeTile: View {
+    @StateObject private var v = VolumeButtonTester()
+    var body: some View {
+        TileCard(title: "Volume buttons", icon: "speaker.badge.exclamationmark", status: v.pressed ? .pass : .idle) {
+            Text(v.pressed ? v.lastChange : "press volume buttons").font(.caption2)
+                .foregroundColor(.secondary).lineLimit(2)
+        }
+        .onAppear { v.start() }
+        .onDisappear { v.stop() }
+    }
+}
+
+// MARK: - Dashboard
+
+struct ContentView: View {
+    @State private var micNames: [String] = []
+    @State private var showDisplay = false
+    @State private var showMicTest = false
 
     var body: some View {
         NavigationView {
             ScrollView {
-                Button(action: { showMicTest = true }) {
-                    HStack {
-                        Image(systemName: "waveform.badge.mic")
-                        Text("Авто-тест микрофонов").fontWeight(.semibold)
+                VStack(spacing: 12) {
+                    Button(action: { showMicTest = true }) {
+                        HStack {
+                            Image(systemName: "waveform.badge.mic")
+                            Text("Mic auto-test (quality)").fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity).padding()
+                        .background(Color.accentColor).foregroundColor(.white).cornerRadius(14)
                     }
-                    .frame(maxWidth: .infinity).padding()
-                    .background(Color.accentColor).foregroundColor(.white).cornerRadius(14)
-                }
-                .padding(.horizontal, 12).padding(.top, 12)
 
-                LazyVGrid(columns: columns, spacing: 12) {
-                    ForEach(micNames, id: \.self) { name in
-                        MicTile(micName: name, display: micLabel(name), mic: mic, verdict: $micVerdict)
+                    ForEach(micRowStarts, id: \.self) { i in
+                        HStack(spacing: 12) {
+                            MicRecordTile(micName: micNames[i], display: micLabel(micNames[i]))
+                            if i + 1 < micNames.count {
+                                MicRecordTile(micName: micNames[i + 1], display: micLabel(micNames[i + 1]))
+                            } else {
+                                Color.clear.frame(maxWidth: .infinity)
+                            }
+                        }
                     }
-                    ForEach(micNames, id: \.self) { name in
-                        MicRecPlayTile(micName: name, display: "Rec+Play " + micLabel(name), rp: recPlayer)
+
+                    HStack(spacing: 12) {
+                        SpeakerToneTile(title: "Bottom speaker", icon: "speaker.wave.3.fill", route: .speaker)
+                        SpeakerToneTile(title: "Top speaker (earpiece)", icon: "speaker.wave.1.fill", route: .earpiece)
                     }
-                    speakerTopTile
-                    speakerBottomTile
-                    torchTile
-                    displayTile
-                    sensorsTile
-                    proximityTile
-                    batteryTile
-                    biometryTile
-                    vibrationTile
-                    volumeTile
+                    HStack(spacing: 12) { TorchTile(); DisplayTile(show: $showDisplay) }
+                    HStack(spacing: 12) { SensorsTile(); DeviceTile() }
+                    HStack(spacing: 12) { BiometryTile(); VibrationTile() }
+                    HStack(spacing: 12) { VolumeTile(); Color.clear.frame(maxWidth: .infinity) }
                 }
                 .padding(12)
             }
             .navigationTitle("PONECHAK")
-            .onAppear {
-                micNames = MicTester.builtInMicNames()
-                biometryText = BiometryTester.describe()
-                volume.start(); sensors.start(); deviceInfo.start()
-            }
-            .onDisappear {
-                mic.stop(); volume.stop(); sensors.stop(); deviceInfo.stop()
-                recPlayer.stopAll(); TorchTester.set(false)
-            }
-            .fullScreenCover(isPresented: $showDisplayTest) { DisplayTestView() }
+            .onAppear { if micNames.isEmpty { micNames = MicTester.builtInMicNames() } }
+            .fullScreenCover(isPresented: $showDisplay) { DisplayTestView() }
             .fullScreenCover(isPresented: $showMicTest) {
-                MicTestView(mics: micNames, label: micLabel, verdict: $micVerdict)
+                MicTestView(mics: micNames, label: micLabel, verdict: .constant([:]))
             }
         }
         .navigationViewStyle(.stack)
     }
 
+    private var micRowStarts: [Int] { Array(stride(from: 0, to: micNames.count, by: 2)) }
+
     private func micLabel(_ name: String) -> String {
         switch name.lowercased() {
-        case "bottom": return "Mic bottom"
-        case "front": return "Mic front"
-        case "back": return "Mic back"
+        case "bottom": return "Bottom mic"
+        case "front": return "Front mic"
+        case "back": return "Back mic"
         default: return "Mic \(name)"
-        }
-    }
-
-    private var speakerTopTile: some View {
-        TileCard(title: "Speaker · top", icon: "speaker.wave.2",
-                 status: spkTop ? .running : .idle,
-                 action: { spkTop = true; tone.play(seconds: 2, earpiece: true)
-                           DispatchQueue.main.asyncAfter(deadline: .now() + 2) { spkTop = false } }) {
-            Text(spkTop ? "playing (earpiece)…" : "earpiece").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var speakerBottomTile: some View {
-        TileCard(title: "Speaker · bottom", icon: "speaker.wave.3.fill",
-                 status: spkBottom ? .running : .idle,
-                 action: { spkBottom = true; tone.play(seconds: 2, earpiece: false)
-                           DispatchQueue.main.asyncAfter(deadline: .now() + 2) { spkBottom = false } }) {
-            Text(spkBottom ? "playing (loud)…" : "loudspeaker").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var torchTile: some View {
-        TileCard(title: "Фонарик", icon: torchOn ? "flashlight.on.fill" : "flashlight.off.fill",
-                 status: torchOn ? .running : .idle,
-                 action: { torchOn.toggle(); TorchTester.set(torchOn) }) {
-            Text(TorchTester.available ? (torchOn ? "включён" : "нажми") : "нет").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var displayTile: some View {
-        TileCard(title: "Дисплей", icon: "square.stack.3d.up.fill", status: .idle,
-                 action: { showDisplayTest = true }) {
-            Text("цвета / пиксели").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var sensorsTile: some View {
-        TileCard(title: "Датчики", icon: "gyroscope",
-                 status: sensors.moved ? .pass : .idle, action: {}) {
-            Text(sensors.accel).font(.system(size: 9, design: .monospaced))
-                .foregroundColor(.secondary).lineLimit(1)
-            Text(sensors.moved ? "движение ✓" : "покачай телефон").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var proximityTile: some View {
-        TileCard(title: "Приближение", icon: "sensor.tag.radiowaves.forward.fill",
-                 status: deviceInfo.proximityTriggered ? .pass : .idle, action: {}) {
-            Text(deviceInfo.proximity).font(.caption2).foregroundColor(.secondary).lineLimit(2)
-        }
-    }
-
-    private var batteryTile: some View {
-        TileCard(title: "Батарея", icon: "battery.100", status: .info, action: {}) {
-            Text(deviceInfo.battery).font(.caption2).foregroundColor(.secondary).lineLimit(2)
-        }
-    }
-
-    private var biometryTile: some View {
-        TileCard(title: "Face ID", icon: "faceid", status: biometryStatus, action: {
-            BiometryTester.evaluate { ok, msg in
-                biometryStatus = ok ? .pass : .fail; biometryText = msg
-            }
-        }) {
-            Text(biometryText).font(.caption2).foregroundColor(.secondary).lineLimit(2)
-        }
-    }
-
-    private var vibrationTile: some View {
-        TileCard(title: "Вибрация", icon: "iphone.radiowaves.left.and.right",
-                 status: .idle, action: { VibrationTester.buzz() }) {
-            Text("нажми — вибро").font(.caption2).foregroundColor(.secondary)
-        }
-    }
-
-    private var volumeTile: some View {
-        TileCard(title: "Кнопки громк.", icon: "button.programmable",
-                 status: volume.pressed ? .pass : .idle, action: {}) {
-            Text(volume.pressed ? volume.lastChange : "нажми кнопки").font(.caption2)
-                .foregroundColor(.secondary).lineLimit(2)
         }
     }
 }
@@ -302,11 +293,11 @@ struct DisplayTestView: View {
             colors[index].ignoresSafeArea()
                 .onTapGesture { index = (index + 1) % colors.count }
             VStack {
-                Text("Тапай по экрану — смена цвета. Ищи битые пиксели/пятна.")
+                Text("Tap the screen to cycle colors. Look for dead pixels / stains.")
                     .padding(10).background(Color.black.opacity(0.55)).foregroundColor(.white)
                     .cornerRadius(8).padding(.top, 40)
                 Spacer()
-                Button("Закрыть") { dismiss() }
+                Button("Close") { dismiss() }
                     .padding().frame(maxWidth: .infinity)
                     .background(Color.accentColor).foregroundColor(.white).cornerRadius(12).padding()
             }
