@@ -100,6 +100,33 @@ struct MicTile: View {
     }
 }
 
+// MARK: - Record & playback tile (per microphone)
+
+struct MicRecPlayTile: View {
+    let micName: String
+    let display: String
+    @ObservedObject var rp: MicRecordPlayer
+
+    private var isActive: Bool { rp.activeMic == micName }
+    private var status: TileStatus { isActive ? .running : .idle }
+
+    var body: some View {
+        TileCard(title: display, icon: "record.circle.fill", status: status,
+                 action: { if !isActive { rp.recordThenPlay(micName: micName) } }) {
+            if isActive {
+                if rp.phase == .recording {
+                    ProgressView(value: rp.level).tint(.red)
+                    Text("recording 3s…").font(.caption2).foregroundColor(.secondary)
+                } else {
+                    Text("playing…").font(.caption2).foregroundColor(.secondary)
+                }
+            } else {
+                Text("record + play").font(.caption2).foregroundColor(.secondary)
+            }
+        }
+    }
+}
+
 // MARK: - Main dashboard
 
 struct ContentView: View {
@@ -107,6 +134,7 @@ struct ContentView: View {
     @StateObject private var volume = VolumeButtonTester()
     @StateObject private var sensors = SensorTester()
     @StateObject private var deviceInfo = DeviceInfoTester()
+    @StateObject private var recPlayer = MicRecordPlayer()
     private let tone = ToneTester()
 
     @State private var micNames: [String] = []
@@ -114,7 +142,8 @@ struct ContentView: View {
     @State private var biometryStatus: TileStatus = .idle
     @State private var biometryText = ""
     @State private var torchOn = false
-    @State private var speakerPlaying = false
+    @State private var spkTop = false
+    @State private var spkBottom = false
     @State private var showDisplayTest = false
     @State private var showMicTest = false
 
@@ -137,7 +166,11 @@ struct ContentView: View {
                     ForEach(micNames, id: \.self) { name in
                         MicTile(micName: name, display: micLabel(name), mic: mic, verdict: $micVerdict)
                     }
-                    speakerTile
+                    ForEach(micNames, id: \.self) { name in
+                        MicRecPlayTile(micName: name, display: "Rec+Play " + micLabel(name), rp: recPlayer)
+                    }
+                    speakerTopTile
+                    speakerBottomTile
                     torchTile
                     displayTile
                     sensorsTile
@@ -156,7 +189,8 @@ struct ContentView: View {
                 volume.start(); sensors.start(); deviceInfo.start()
             }
             .onDisappear {
-                mic.stop(); volume.stop(); sensors.stop(); deviceInfo.stop(); TorchTester.set(false)
+                mic.stop(); volume.stop(); sensors.stop(); deviceInfo.stop()
+                recPlayer.stopAll(); TorchTester.set(false)
             }
             .fullScreenCover(isPresented: $showDisplayTest) { DisplayTestView() }
             .fullScreenCover(isPresented: $showMicTest) {
@@ -168,19 +202,28 @@ struct ContentView: View {
 
     private func micLabel(_ name: String) -> String {
         switch name.lowercased() {
-        case "bottom": return "Микр. нижний"
-        case "front": return "Микр. фронт."
-        case "back": return "Микр. задний"
-        default: return "Микр. \(name)"
+        case "bottom": return "Mic bottom"
+        case "front": return "Mic front"
+        case "back": return "Mic back"
+        default: return "Mic \(name)"
         }
     }
 
-    private var speakerTile: some View {
-        TileCard(title: "Динамик", icon: "speaker.wave.3.fill",
-                 status: speakerPlaying ? .running : .idle,
-                 action: { speakerPlaying = true; tone.play()
-                           DispatchQueue.main.asyncAfter(deadline: .now() + 2) { speakerPlaying = false } }) {
-            Text(speakerPlaying ? "играет…" : "нажми — тон").font(.caption2).foregroundColor(.secondary)
+    private var speakerTopTile: some View {
+        TileCard(title: "Speaker · top", icon: "speaker.wave.2",
+                 status: spkTop ? .running : .idle,
+                 action: { spkTop = true; tone.play(seconds: 2, earpiece: true)
+                           DispatchQueue.main.asyncAfter(deadline: .now() + 2) { spkTop = false } }) {
+            Text(spkTop ? "playing (earpiece)…" : "earpiece").font(.caption2).foregroundColor(.secondary)
+        }
+    }
+
+    private var speakerBottomTile: some View {
+        TileCard(title: "Speaker · bottom", icon: "speaker.wave.3.fill",
+                 status: spkBottom ? .running : .idle,
+                 action: { spkBottom = true; tone.play(seconds: 2, earpiece: false)
+                           DispatchQueue.main.asyncAfter(deadline: .now() + 2) { spkBottom = false } }) {
+            Text(spkBottom ? "playing (loud)…" : "loudspeaker").font(.caption2).foregroundColor(.secondary)
         }
     }
 
